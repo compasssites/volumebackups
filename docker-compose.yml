@@ -1,0 +1,29 @@
+# Example Docker Compose configuration for development/testing
+version: '3.8'
+
+services:
+  volume-backup:
+    build: .
+    container_name: volume-backup-dev
+    ports:
+      - "5000:5000"
+    environment:
+      - RESTIC_PASSWORD=development-password-change-me
+      - RCLONE_REMOTE=onedrive
+      - RCLONE_FOLDER=docker-backups-dev
+      - TZ=America/New_York
+      - AUTH_USER=admin
+      - AUTH_PASSWORD=admin123
+    volumes:
+      # Persistent data for development
+      - ./data:/data
+      
+      # Example volume mounts (uncomment and modify as needed)
+      # - example_volume:/volumes/example:ro
+      # - ./test-data:/volumes/test-data:ro
+    restart: unless-stopped
+
+# Example external volumes (uncomment and modify as needed)
+# volumes:
+#   example_volume:
+#     external: true

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Docker Volume Backup{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">System Logs</h1>
+            <p class="mt-1 text-sm text-gray-600">View detailed application and backup logs</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="refreshLogs()" 
+                    class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                <i data-lucide="refresh-cw" class="w-4 h-4 mr-2 inline"></i>
+                Refresh
+            </button>
+            <button onclick="clearLogs()" 
+                    class="px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50">
+                <i data-lucide="trash-2" class="w-4 h-4 mr-2 inline"></i>
+                Clear Logs
+            </button>
+        </div>
+    </div>
+
+    <!-- Log Filters -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center">
+                <label class="text-sm font-medium text-gray-700 mr-2">Level:</label>
+                <select id="log-level-filter" 
+                        onchange="filterLogs()"
+                        class="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All</option>
+                    <option value="INFO">Info</option>
+                    <option value="WARNING">Warning</option>
+                    <option value="ERROR">Error</option>
+                </select>
+            </div>
+            
+            <div class="flex items-center">
+                <label class="text-sm font-medium text-gray-700 mr-2">Search:</label>
+                <input type="text" 
+                       id="log-search" 
+                       placeholder="Search logs..."
+                       onkeyup="filterLogs()"
+                       class="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div class="flex items-center">
+                <input type="checkbox" 
+                       id="auto-refresh" 
+                       class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                <label for="auto-refresh" class="ml-2 text-sm text-gray-700">Auto refresh</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Display -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Recent Logs</h3>
+        </div>
+        
+        <div id="logs-container" class="max-h-96 overflow-y-auto">
+            {% if logs %}
+            <div class="divide-y divide-gray-200">
+                {% for log in logs %}
+                <div class="log-entry p-4" 
+                     data-level="{{ log.level }}" 
+                     data-message="{{ log.message|lower }}">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 mr-3">
+                            {% if log.level == 'ERROR' %}
+                                <i data-lucide="alert-circle" class="w-4 h-4 text-red-500 mt-0.5"></i>
+                            {% elif log.level == 'WARNING' %}
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-yellow-500 mt-0.5"></i>
+                            {% else %}
+                                <i data-lucide="info" class="w-4 h-4 text-blue-500 mt-0.5"></i>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm font-medium text-gray-900">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ 'bg-red-100 text-red-800' if log.level == 'ERROR' else 'bg-yellow-100 text-yellow-800' if log.level == 'WARNING' else 'bg-blue-100 text-blue-800' }}">
+                                        {{ log.level }}
+                                    </span>
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    {{ log.timestamp[:19] | replace('T', ' ') }}
+                                </p>
+                            </div>
+                            <p class="text-sm text-gray-700 mt-1 break-words">{{ log.message }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="p-6 text-center">
+                <i data-lucide="file-text" class="w-12 h-12 text-gray-400 mx-auto mb-4"></i>
+                <p class="text-gray-500">No logs available</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Log Statistics -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i data-lucide="info" class="w-8 h-8 text-blue-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Info Messages</p>
+                    <p class="text-lg font-semibold text-gray-900" id="info-count">
+                        {{ logs | selectattr('level', 'equalto', 'INFO') | list | length }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-yellow-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Warnings</p>
+                    <p class="text-lg font-semibold text-gray-900" id="warning-count">
+                        {{ logs | selectattr('level', 'equalto', 'WARNING') | list | length }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i data-lucide="alert-circle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Errors</p>
+                    <p class="text-lg font-semibold text-gray-900" id="error-count">
+                        {{ logs | selectattr('level', 'equalto', 'ERROR') | list | length }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let autoRefreshInterval = null;
+
+function filterLogs() {
+    const levelFilter = document.getElementById('log-level-filter').value;
+    const searchFilter = document.getElementById('log-search').value.toLowerCase();
+    const logEntries = document.querySelectorAll('.log-entry');
+    
+    logEntries.forEach(entry => {
+        const level = entry.getAttribute('data-level');
+        const message = entry.getAttribute('data-message');
+        
+        const levelMatch = !levelFilter || level === levelFilter;
+        const searchMatch = !searchFilter || message.includes(searchFilter);
+        
+        if (levelMatch && searchMatch) {
+            entry.style.display = 'block';
+        } else {
+            entry.style.display = 'none';
+        }
+    });
+}
+
+function refreshLogs() {
+    location.reload();
+}
+
+function clearLogs() {
+    if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
+        // This would typically call an API endpoint to clear logs
+        showNotification('Log clearing is not implemented yet', 'info');
+    }
+}
+
+// Auto refresh functionality
+document.getElementById('auto-refresh').addEventListener('change', function() {
+    if (this.checked) {
+        autoRefreshInterval = setInterval(() => {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(logs => {
+                    // Update logs display without full page reload
+                    // This is a simplified version - in production you'd want to 
+                    // intelligently update only new logs
+                    if (logs.length > 0) {
+                        refreshLogs();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching logs:', error);
+                });
+        }, 5000);
+        showNotification('Auto refresh enabled', 'success');
+    } else {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        showNotification('Auto refresh disabled', 'info');
+    }
+});
+
+// Auto-scroll to bottom for new logs
+document.addEventListener('DOMContentLoaded', function() {
+    const logsContainer = document.getElementById('logs-container');
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+});
+</script>
+{% endblock %}

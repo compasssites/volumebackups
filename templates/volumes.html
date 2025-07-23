@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Volumes - Docker Volume Backup{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Volume Management</h1>
+            <p class="mt-1 text-sm text-gray-600">Select which volumes to include in backups</p>
+        </div>
+        <button onclick="saveSelection()" 
+                class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <i data-lucide="save" class="w-4 h-4 mr-2 inline"></i>
+            Save Selection
+        </button>
+    </div>
+
+    <!-- Volume Selection -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">Available Volumes</h3>
+                <div class="flex space-x-2">
+                    <button onclick="selectAll()" 
+                            class="text-sm text-blue-600 hover:text-blue-800">
+                        Select All
+                    </button>
+                    <span class="text-gray-300">|</span>
+                    <button onclick="selectNone()" 
+                            class="text-sm text-blue-600 hover:text-blue-800">
+                        Select None
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        {% if volumes %}
+        <div class="divide-y divide-gray-200">
+            {% for volume in volumes %}
+            <div class="p-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input type="checkbox" 
+                               id="volume-{{ loop.index }}" 
+                               name="selected_volumes" 
+                               value="{{ volume.name }}"
+                               {% if volume.selected %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-4">
+                            <div class="flex items-center">
+                                <i data-lucide="folder" class="w-5 h-5 text-gray-400 mr-2"></i>
+                                <h4 class="text-lg font-medium text-gray-900">{{ volume.name }}</h4>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1">{{ volume.path }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-gray-900">{{ volume.size }}</div>
+                        {% if volume.selected %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                <i data-lucide="check" class="w-3 h-3 mr-1"></i>
+                                Selected
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-6 text-center">
+            <i data-lucide="folder-x" class="w-12 h-12 text-gray-400 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No Volumes Found</h3>
+            <p class="text-gray-500 mb-4">Make sure Docker volumes are mounted to /volumes in the container.</p>
+            <div class="bg-gray-50 rounded-lg p-4 text-left">
+                <h4 class="text-sm font-medium text-gray-900 mb-2">Example Docker Compose:</h4>
+                <pre class="text-xs text-gray-600"><code>services:
+  volume-backup:
+    image: your-backup-image
+    volumes:
+      - volume1:/volumes/volume1:ro
+      - volume2:/volumes/volume2:ro
+      - ./data:/data</code></pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if volumes %}
+    <!-- Selection Summary -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-center">
+            <i data-lucide="info" class="w-5 h-5 text-blue-600 mr-3"></i>
+            <div>
+                <p class="text-sm text-blue-800">
+                    <span id="selected-count">{{ volumes|selectattr('selected')|list|length }}</span> 
+                    of {{ volumes|length }} volumes selected for backup.
+                </p>
+                <p class="text-xs text-blue-600 mt-1">
+                    Changes will take effect after saving and will be used in the next backup.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('input[name="selected_volumes"]');
+    const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    document.getElementById('selected-count').textContent = selectedCount;
+}
+
+function selectAll() {
+    const checkboxes = document.querySelectorAll('input[name="selected_volumes"]');
+    checkboxes.forEach(cb => cb.checked = true);
+    updateSelectedCount();
+}
+
+function selectNone() {
+    const checkboxes = document.querySelectorAll('input[name="selected_volumes"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateSelectedCount();
+}
+
+function saveSelection() {
+    const checkboxes = document.querySelectorAll('input[name="selected_volumes"]:checked');
+    const selectedVolumes = Array.from(checkboxes).map(cb => cb.value);
+    
+    fetch('/api/volumes/select', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            volumes: selectedVolumes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Volume selection saved successfully', 'success');
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Failed to save volume selection', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Add event listeners to checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('input[name="selected_volumes"]');
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+});
+</script>
+{% endblock %}

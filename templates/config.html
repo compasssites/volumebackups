@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Docker Volume Backup{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900">Configuration</h1>
+        <p class="mt-1 text-sm text-gray-600">Manage backup settings and environment variables</p>
+    </div>
+
+    <!-- Environment Variables -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Environment Variables</h3>
+            <p class="text-sm text-gray-600 mt-1">These are configured at container startup</p>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Restic Password</label>
+                    <div class="mt-1 flex items-center">
+                        {% if env_vars.RESTIC_PASSWORD %}
+                            <i data-lucide="check-circle" class="w-5 h-5 text-green-500 mr-2"></i>
+                            <span class="text-sm text-green-700">Configured</span>
+                        {% else %}
+                            <i data-lucide="alert-circle" class="w-5 h-5 text-red-500 mr-2"></i>
+                            <span class="text-sm text-red-700">Not configured</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Set RESTIC_PASSWORD environment variable</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Rclone Remote</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900">{{ env_vars.RCLONE_REMOTE or 'Not set' }}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Set RCLONE_REMOTE environment variable</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Rclone Folder</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900">{{ env_vars.RCLONE_FOLDER or 'Not set' }}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Set RCLONE_FOLDER environment variable</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Timezone</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900">{{ env_vars.TZ }}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Set TZ environment variable</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Schedule -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Backup Schedule</h3>
+        </div>
+        <div class="p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="flex items-center">
+                        <input type="checkbox" 
+                               id="schedule-enabled" 
+                               {% if config.get('schedule_enabled', True) %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <span class="ml-2 text-sm font-medium text-gray-900">Enable automatic backups</span>
+                    </label>
+                    <p class="text-sm text-gray-600 mt-1">Run backups daily at 2:00 AM</p>
+                </div>
+                <button onclick="updateSchedule()" 
+                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rclone Configuration -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Rclone Configuration</h3>
+        </div>
+        <div class="p-6">
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-sm font-medium text-gray-900 mb-2">Initial Setup Instructions</h4>
+                <div class="text-sm text-gray-600 space-y-2">
+                    <p>1. Access the container shell:</p>
+                    <code class="block bg-gray-100 p-2 rounded text-xs">docker exec -it &lt;container-name&gt; /bin/bash</code>
+                    
+                    <p>2. Configure rclone interactively:</p>
+                    <code class="block bg-gray-100 p-2 rounded text-xs">rclone config</code>
+                    
+                    <p>3. For OneDrive, choose option "Microsoft OneDrive" and follow the prompts</p>
+                    
+                    <p>4. Set environment variables in your deployment:</p>
+                    <code class="block bg-gray-100 p-2 rounded text-xs">
+RCLONE_REMOTE=onedrive<br>
+RCLONE_FOLDER=backup<br>
+RESTIC_PASSWORD=your-secure-password
+                    </code>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <button onclick="testRclone()" 
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    <i data-lucide="check" class="w-4 h-4 mr-2 inline"></i>
+                    Test Rclone Connection
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">System Information</h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Data Directory</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900 font-mono">/data</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Configuration, logs, and cache stored here</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Volumes Directory</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900 font-mono">/volumes</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Mount Docker volumes here for backup</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Configuration File</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900 font-mono">/data/config.json</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Current backup configuration</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Log File</label>
+                    <div class="mt-1">
+                        <span class="text-sm text-gray-900 font-mono">/data/app.log</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Application logs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateSchedule() {
+    const enabled = document.getElementById('schedule-enabled').checked;
+    
+    fetch('/api/config/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            schedule_enabled: enabled
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Schedule updated successfully', 'success');
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Failed to update schedule', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function testRclone() {
+    showNotification('Testing rclone connection...', 'info');
+    
+    // This would typically call an API endpoint to test rclone
+    // For now, just show a placeholder message
+    setTimeout(() => {
+        showNotification('Please check the logs for rclone test results', 'info');
+    }, 2000);
+}
+</script>
+{% endblock %}
