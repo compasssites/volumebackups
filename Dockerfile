@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     tar \
     gzip \
+    bzip2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install restic
