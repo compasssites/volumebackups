@@ -35,11 +35,17 @@
             <div class="flex items-center mb-4">
                 <div class="flex-shrink-0">
                     {% if status.status == 'running' %}
-                        <i data-lucide="loader" class="w-6 h-6 text-blue-600 status-running"></i>
+                        <div class="status-indicator running">
+                            <i data-lucide="loader" class="w-6 h-6 text-blue-600 status-running"></i>
+                        </div>
                     {% elif status.status == 'success' %}
-                        <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+                        <div class="status-indicator success">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+                        </div>
                     {% elif status.status == 'error' %}
-                        <i data-lucide="alert-circle" class="w-6 h-6 text-red-600"></i>
+                        <div class="status-indicator error">
+                            <i data-lucide="alert-circle" class="w-6 h-6 text-red-600"></i>
+                        </div>
                     {% endif %}
                 </div>
                 <div class="ml-3">
@@ -48,14 +54,24 @@
                         {% if status.status == 'running' %}in progress{% elif status.status == 'success' %}completed{% elif status.status == 'error' %}failed{% endif %}
                     </p>
                     <p class="text-sm text-gray-600">{{ status.message }}</p>
+                    {% if status.start_time and status.status == 'running' %}
+                    <p class="text-xs text-gray-500">
+                        Started: {{ status.start_time|int|datetime if status.start_time else 'Unknown' }}
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             
             {% if status.status == 'running' %}
-            <div class="w-full bg-gray-200 rounded-full h-2">
-                <div class="bg-blue-600 h-2 rounded-full progress-bar" style="width: {{ status.progress }}%"></div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div class="bg-blue-600 h-3 rounded-full progress-bar transition-all duration-300" style="width: {{ status.progress }}%"></div>
             </div>
-            <p class="text-xs text-gray-500 mt-1">{{ status.progress }}% complete</p>
+            <div class="flex justify-between text-xs text-gray-500">
+                <span>{{ status.progress }}% complete</span>
+                {% if status.estimated_completion %}
+                <span id="eta-countdown">Calculating ETA...</span>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </div>
@@ -121,6 +137,12 @@
                                 <i data-lucide="download" class="w-4 h-4 inline mr-1"></i>
                                 Restore
                             </button>
+                            <a href="{{ url_for('download_backup', snapshot_id=snapshot.id) }}" 
+                               class="text-green-600 hover:text-green-900"
+                               title="Download backup archive">
+                                <i data-lucide="archive" class="w-4 h-4 inline mr-1"></i>
+                                Download
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}

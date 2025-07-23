@@ -87,11 +87,17 @@
             <div class="flex items-center mb-4">
                 <div class="flex-shrink-0">
                     {% if status.status == 'running' %}
-                        <i data-lucide="loader" class="w-6 h-6 text-blue-600 status-running"></i>
+                        <div class="status-indicator running">
+                            <i data-lucide="loader" class="w-6 h-6 text-blue-600 status-running"></i>
+                        </div>
                     {% elif status.status == 'success' %}
-                        <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+                        <div class="status-indicator success">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+                        </div>
                     {% elif status.status == 'error' %}
-                        <i data-lucide="alert-circle" class="w-6 h-6 text-red-600"></i>
+                        <div class="status-indicator error">
+                            <i data-lucide="alert-circle" class="w-6 h-6 text-red-600"></i>
+                        </div>
                     {% endif %}
                 </div>
                 <div class="ml-3">
@@ -100,14 +106,24 @@
                         {% if status.status == 'running' %}in progress{% elif status.status == 'success' %}completed{% elif status.status == 'error' %}failed{% endif %}
                     </p>
                     <p class="text-sm text-gray-600">{{ status.message }}</p>
+                    {% if status.estimated_completion and status.status == 'running' %}
+                    <p class="text-xs text-gray-500">
+                        Started: {{ status.start_time|int|datetime if status.start_time else 'Unknown' }}
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             
             {% if status.status == 'running' %}
-            <div class="w-full bg-gray-200 rounded-full h-2">
-                <div class="bg-blue-600 h-2 rounded-full progress-bar" style="width: {{ status.progress }}%"></div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div class="bg-blue-600 h-3 rounded-full progress-bar transition-all duration-300" style="width: {{ status.progress }}%"></div>
             </div>
-            <p class="text-xs text-gray-500 mt-1">{{ status.progress }}% complete</p>
+            <div class="flex justify-between text-xs text-gray-500">
+                <span>{{ status.progress }}% complete</span>
+                {% if status.estimated_completion %}
+                <span id="eta-countdown">Calculating ETA...</span>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </div>
@@ -131,6 +147,12 @@
                    class="flex items-center justify-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <i data-lucide="settings" class="w-4 h-4 mr-2"></i>
                     Manage Volumes
+                </a>
+                
+                <a href="{{ url_for('download_logs') }}" 
+                   class="flex items-center justify-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                    Download Logs
                 </a>
             </div>
         </div>
@@ -223,5 +245,30 @@ function startBackup() {
         });
     }
 }
+
+// Enhanced status monitoring with ETA countdown
+function updateETACountdown() {
+    const etaElement = document.getElementById('eta-countdown');
+    if (!etaElement) return;
+    
+    fetch('/api/status/detailed')
+        .then(response => response.json())
+        .then(data => {
+            if (data.estimated_completion && data.status === 'running') {
+                const eta = new Date(data.estimated_completion * 1000);
+                const now = new Date();
+                const remaining = Math.max(0, Math.floor((eta - now) / 1000));
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                etaElement.textContent = `ETA: ${minutes}m ${seconds}s`;
+            }
+        })
+        .catch(error => {
+            console.error('Error updating ETA:', error);
+        });
+}
+
+// Update ETA every second when backup is running
+setInterval(updateETACountdown, 1000);
 </script>
 {% endblock %}

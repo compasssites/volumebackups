@@ -19,6 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Flask
 instance/
@@ -26,16 +27,19 @@ instance/
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
@@ -46,12 +50,26 @@ instance/
 ehthumbs.db
 Thumbs.db
 
-# Data directory (when testing locally)
+# Logs
+*.log
+logs/
+
+# Data directory (for development)
 data/
 volumes/
 
-# Logs
-*.log
+# Temporary files
+*.tmp
+*.temp
+temp/
 
 # Docker
 .dockerignore
+
+# Backup files
+*.bak
+*.backup
+
+# Test files
+test_*
+*_test.py

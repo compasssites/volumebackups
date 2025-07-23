@@ -3,6 +3,7 @@ import json
 import subprocess
 import threading
 import time
+import re
 from datetime import datetime
 from enum import Enum
 import logging
@@ -58,6 +59,7 @@ class BackupEngine:
     def _get_env_vars(self):
         """Get environment variables for restic/rclone"""
         env = os.environ.copy()
+        env['RCLONE_CONFIG'] = '/data/rclone.conf'
         env['RESTIC_REPOSITORY'] = f"rclone:{env.get('RCLONE_REMOTE', 'onedrive')}:{env.get('RCLONE_FOLDER', 'backup')}"
         return env
     
@@ -86,12 +88,24 @@ class BackupEngine:
     def get_status(self):
         """Get current status"""
         with self.lock:
-            return {
+            status = {
                 'status': self.status.value,
                 'operation': self.current_operation,
                 'progress': self.progress,
-                'message': self.message
+                'message': self.message,
+                'start_time': getattr(self, 'start_time', None),
+                'estimated_completion': getattr(self, 'estimated_completion', None)
             }
+            
+            # Calculate estimated completion time
+            if self.status == BackupStatus.RUNNING and hasattr(self, 'start_time') and self.progress > 0:
+                elapsed = time.time() - self.start_time
+                if self.progress > 5:  # Only estimate after some progress
+                    total_estimated = elapsed * (100 / self.progress)
+                    remaining = total_estimated - elapsed
+                    status['estimated_completion'] = time.time() + remaining
+            
+            return status
     
     def get_recent_logs(self, limit=50):
         """Get recent log entries"""
@@ -137,6 +151,7 @@ class BackupEngine:
             self.current_operation = "backup"
             self.progress = 0
             self.message = "Preparing backup..."
+            self.start_time = time.time()
         
         try:
             self._log_message('INFO', f"Starting backup for volumes: {', '.join(selected_volumes)}")
@@ -183,10 +198,24 @@ class BackupEngine:
                 if line:
                     self._log_message('INFO', f"Restic: {line}")
                     
-                    # Update progress based on output
-                    if "processed" in line or "backed up" in line:
+                    # Update progress based on output patterns
+                    if "processed" in line.lower():
+                        # Try to extract file count for better progress estimation
+                        match = re.search(r'(\d+)\s+files', line)
+                        if match:
+                            files_processed = int(match.group(1))
+                            # Rough progress estimation based on file count
+                            progress_increment = min(5, max(1, files_processed // 100))
+                            with self.lock:
+                                self.progress = min(85, self.progress + progress_increment)
+                                self.message = f"Processing files... ({files_processed} files)"
+                    elif "backed up" in line.lower() or "snapshot" in line.lower():
                         with self.lock:
-                            self.progress = min(90, self.progress + 5)
+                            self.progress = min(95, self.progress + 10)
+                            self.message = "Finalizing backup..."
+                    elif "uploading" in line.lower():
+                        with self.lock:
+                            self.message = "Uploading to remote storage..."
             
             process.wait()
             
@@ -225,6 +254,7 @@ class BackupEngine:
             self.current_operation = "restore"
             self.progress = 0
             self.message = "Preparing restore..."
+            self.start_time = time.time()
         
         try:
             self._log_message('INFO', f"Starting restore of snapshot {snapshot_id} to {target_path}")
@@ -259,10 +289,18 @@ class BackupEngine:
                 if line:
                     self._log_message('INFO', f"Restic: {line}")
                     
-                    # Update progress based on output
-                    if "restored" in line or "files" in line:
+                    # Update progress based on output patterns
+                    if "restored" in line.lower():
+                        match = re.search(r'(\d+)\s+files', line)
+                        if match:
+                            files_restored = int(match.group(1))
+                            progress_increment = min(5, max(1, files_restored // 50))
+                            with self.lock:
+                                self.progress = min(90, self.progress + progress_increment)
+                                self.message = f"Restoring files... ({files_restored} files)"
+                    elif "downloading" in line.lower():
                         with self.lock:
-                            self.progress = min(90, self.progress + 5)
+                            self.message = "Downloading from remote storage..."
             
             process.wait()
             
@@ -310,6 +348,10 @@ class BackupEngine:
             if self.status != BackupStatus.RUNNING:
                 self.current_operation = None
                 self.progress = 0
+                if hasattr(self, 'start_time'):
+                    delattr(self, 'start_time')
+                if hasattr(self, 'estimated_completion'):
+                    delattr(self, 'estimated_completion')
                 if self.status == BackupStatus.SUCCESS:
                     self.status = BackupStatus.IDLE
                     self.message = ""

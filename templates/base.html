@@ -28,6 +28,36 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+        
+        .status-indicator {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .status-indicator::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.running::after {
+            background-color: #3b82f6;
+        }
+        
+        .status-indicator.success::after {
+            background-color: #10b981;
+            animation: none;
+        }
+        
+        .status-indicator.error::after {
+            background-color: #ef4444;
+            animation: none;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -131,7 +161,19 @@
                         icon.innerHTML = '<i data-lucide="loader" class="w-4 h-4 text-blue-600 status-running"></i>';
                         
                         // Update message
-                        message.textContent = data.message || `${data.operation} in progress...`;
+                        let messageText = data.message || `${data.operation} in progress...`;
+                        
+                        // Add estimated completion time if available
+                        if (data.estimated_completion) {
+                            const eta = new Date(data.estimated_completion * 1000);
+                            const now = new Date();
+                            const remaining = Math.max(0, Math.floor((eta - now) / 1000));
+                            const minutes = Math.floor(remaining / 60);
+                            const seconds = remaining % 60;
+                            messageText += ` (ETA: ${minutes}m ${seconds}s)`;
+                        }
+                        
+                        message.textContent = messageText;
                         
                         // Update progress
                         progressBar.style.width = `${data.progress}%`;
@@ -196,6 +238,9 @@
                 <div class="flex">
                     <i data-lucide="${iconName}" class="w-5 h-5 mt-0.5 mr-2 flex-shrink-0"></i>
                     <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-auto text-gray-400 hover:text-gray-600">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
                 </div>
             `;
             
@@ -204,7 +249,9 @@
             
             // Remove after 5 seconds
             setTimeout(() => {
-                notification.remove();
+                if (notification.parentNode) {
+                    notification.remove();
+                }
             }, 5000);
         }
     </script>

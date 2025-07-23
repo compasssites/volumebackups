@@ -63,23 +63,89 @@
     <div class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-gray-200">
             <h3 class="text-lg font-medium text-gray-900">Backup Schedule</h3>
+            <p class="text-sm text-gray-600 mt-1">Configure when automatic backups should run</p>
         </div>
         <div class="p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <label class="flex items-center">
-                        <input type="checkbox" 
-                               id="schedule-enabled" 
-                               {% if config.get('schedule_enabled', True) %}checked{% endif %}
-                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                        <span class="ml-2 text-sm font-medium text-gray-900">Enable automatic backups</span>
+            <div class="space-y-4">
+                <div class="flex items-center">
+                    <input type="checkbox" 
+                           id="schedule-enabled" 
+                           {% if schedule.enabled %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="schedule-enabled" class="ml-2 text-sm font-medium text-gray-900">
+                        Enable automatic backups
                     </label>
-                    <p class="text-sm text-gray-600 mt-1">Run backups daily at 2:00 AM</p>
                 </div>
-                <button onclick="updateSchedule()" 
-                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                    Save
-                </button>
+                
+                <div id="schedule-settings" class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Minute</label>
+                        <input type="text" 
+                               id="schedule-minute" 
+                               value="{{ schedule.minute }}"
+                               placeholder="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">0-59</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hour</label>
+                        <input type="text" 
+                               id="schedule-hour" 
+                               value="{{ schedule.hour }}"
+                               placeholder="2"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">0-23</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Day</label>
+                        <input type="text" 
+                               id="schedule-day" 
+                               value="{{ schedule.day }}"
+                               placeholder="*"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">1-31 or *</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                        <input type="text" 
+                               id="schedule-month" 
+                               value="{{ schedule.month }}"
+                               placeholder="*"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">1-12 or *</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Day of Week</label>
+                        <input type="text" 
+                               id="schedule-dow" 
+                               value="{{ schedule.dow }}"
+                               placeholder="*"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">0-7 or *</p>
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div class="flex items-center">
+                        <i data-lucide="info" class="w-4 h-4 text-blue-600 mr-2"></i>
+                        <div class="text-sm text-blue-800">
+                            <p class="font-medium">Current schedule: <span id="schedule-preview">{{ schedule.minute }} {{ schedule.hour }} {{ schedule.day }} {{ schedule.month }} {{ schedule.dow }}</span></p>
+                            <p class="text-xs mt-1">Use cron syntax. Examples: "0 2 * * *" (daily at 2 AM), "0 */6 * * *" (every 6 hours)</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button onclick="updateSchedule()" 
+                            class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                        <i data-lucide="save" class="w-4 h-4 mr-2 inline"></i>
+                        Save Schedule
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -87,9 +153,53 @@
     <!-- Rclone Configuration -->
     <div class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">Rclone Configuration</h3>
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">Rclone Configuration</h3>
+                <div class="flex space-x-2">
+                    <button onclick="testRclone()" 
+                            class="px-3 py-1 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                        <i data-lucide="check" class="w-3 h-3 mr-1 inline"></i>
+                        Test Connection
+                    </button>
+                    <button onclick="toggleRcloneEditor()" 
+                            class="px-3 py-1 text-xs border border-blue-300 rounded text-blue-700 hover:bg-blue-50">
+                        <i data-lucide="edit" class="w-3 h-3 mr-1 inline"></i>
+                        Edit Config
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="p-6">
+            <!-- Rclone Config Editor (Hidden by default) -->
+            <div id="rclone-editor" class="hidden mb-6">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-sm font-medium text-gray-900">Edit rclone.conf</h4>
+                        <div class="flex space-x-2">
+                            <button onclick="saveRcloneConfig()" 
+                                    class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                                Save
+                            </button>
+                            <button onclick="cancelRcloneEdit()" 
+                                    class="px-3 py-1 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="rclone-config-editor" 
+                              rows="15" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="[remote-name]
+type = onedrive
+token = {...}
+drive_type = personal">{{ rclone_config }}</textarea>
+                    <p class="text-xs text-gray-500 mt-2">
+                        <i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i>
+                        Advanced users only. Incorrect configuration may break backups.
+                    </p>
+                </div>
+            </div>
+            
             <div class="bg-gray-50 rounded-lg p-4">
                 <h4 class="text-sm font-medium text-gray-900 mb-2">Initial Setup Instructions</h4>
                 <div class="text-sm text-gray-600 space-y-2">
@@ -108,14 +218,6 @@ RCLONE_FOLDER=backup<br>
 RESTIC_PASSWORD=your-secure-password
                     </code>
                 </div>
-            </div>
-            
-            <div class="mt-4">
-                <button onclick="testRclone()" 
-                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="check" class="w-4 h-4 mr-2 inline"></i>
-                    Test Rclone Connection
-                </button>
             </div>
         </div>
     </div>
@@ -166,20 +268,31 @@ RESTIC_PASSWORD=your-secure-password
 <script>
 function updateSchedule() {
     const enabled = document.getElementById('schedule-enabled').checked;
+    const minute = document.getElementById('schedule-minute').value;
+    const hour = document.getElementById('schedule-hour').value;
+    const day = document.getElementById('schedule-day').value;
+    const month = document.getElementById('schedule-month').value;
+    const dow = document.getElementById('schedule-dow').value;
     
-    fetch('/api/config/update', {
+    fetch('/api/schedule/update', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            schedule_enabled: enabled
+            enabled: enabled,
+            minute: minute,
+            hour: hour,
+            day: day,
+            month: month,
+            dow: dow
         })
     })
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
             showNotification('Schedule updated successfully', 'success');
+            updateSchedulePreview();
         } else {
             showNotification(data.message, 'error');
         }
@@ -190,14 +303,102 @@ function updateSchedule() {
     });
 }
 
-function testRclone() {
-    showNotification('Testing rclone connection...', 'info');
+function updateSchedulePreview() {
+    const minute = document.getElementById('schedule-minute').value || '*';
+    const hour = document.getElementById('schedule-hour').value || '*';
+    const day = document.getElementById('schedule-day').value || '*';
+    const month = document.getElementById('schedule-month').value || '*';
+    const dow = document.getElementById('schedule-dow').value || '*';
     
-    // This would typically call an API endpoint to test rclone
-    // For now, just show a placeholder message
-    setTimeout(() => {
-        showNotification('Please check the logs for rclone test results', 'info');
-    }, 2000);
+    document.getElementById('schedule-preview').textContent = `${minute} ${hour} ${day} ${month} ${dow}`;
 }
+
+function toggleRcloneEditor() {
+    const editor = document.getElementById('rclone-editor');
+    if (editor.classList.contains('hidden')) {
+        // Load current config
+        fetch('/api/rclone/config')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('rclone-config-editor').value = data.config || '';
+                editor.classList.remove('hidden');
+            })
+            .catch(error => {
+                showNotification('Failed to load rclone config', 'error');
+            });
+    } else {
+        editor.classList.add('hidden');
+    }
+}
+
+function saveRcloneConfig() {
+    const config = document.getElementById('rclone-config-editor').value;
+    
+    fetch('/api/rclone/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            config: config
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Rclone configuration saved successfully', 'success');
+            document.getElementById('rclone-editor').classList.add('hidden');
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Failed to save rclone config', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function cancelRcloneEdit() {
+    document.getElementById('rclone-editor').classList.add('hidden');
+}
+
+function testRclone() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i data-lucide="loader" class="w-3 h-3 mr-1 inline animate-spin"></i>Testing...';
+    button.disabled = true;
+    
+    fetch('/api/rclone/test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Rclone connection successful', 'success');
+        } else {
+            showNotification(`Rclone test failed: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Failed to test rclone connection', 'error');
+        console.error('Error:', error);
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        lucide.createIcons();
+    });
+}
+
+// Update schedule preview when inputs change
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduleInputs = ['schedule-minute', 'schedule-hour', 'schedule-day', 'schedule-month', 'schedule-dow'];
+    scheduleInputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', updateSchedulePreview);
+    });
+});
 </script>
 {% endblock %}

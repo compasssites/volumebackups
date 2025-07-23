@@ -5,14 +5,17 @@ A comprehensive Flask-based web application for backing up and restoring Docker 
 ## Features
 
 - **Web Dashboard**: Intuitive interface for managing backups and volumes
+- **HTTP Basic Authentication**: Optional security for web interface
 - **Volume Discovery**: Automatically detects mounted Docker volumes
 - **Restic Integration**: Deduplicated, incremental backups with encryption
 - **Rclone Support**: Compatible with 40+ cloud storage providers
-- **Scheduled Backups**: Automated daily backups via cron
+- **Configurable Scheduling**: Web-based cron schedule editor
 - **Manual Operations**: On-demand backup and restore functionality
 - **Real-time Monitoring**: Live status updates and progress tracking
+- **Enhanced Progress Tracking**: ETA calculations and detailed status indicators
 - **Comprehensive Logging**: Detailed logs for troubleshooting
-- **Basic Authentication**: Optional HTTP authentication for security
+- **Download Capabilities**: Download logs and backup archives
+- **Rclone Config Editor**: Advanced configuration management
 
 ## Quick Start with CapRover
 
@@ -47,7 +50,7 @@ RCLONE_FOLDER=docker-backups
 # Optional - Timezone
 TZ=America/New_York
 
-# Optional - Basic authentication
+# Optional - Basic authentication (recommended for production)
 AUTH_USER=admin
 AUTH_PASSWORD=secure-password
 ```
@@ -116,7 +119,8 @@ After deployment, you need to configure rclone for your storage backend:
 2. Log in with your credentials (if authentication is enabled)
 3. Go to "Volumes" tab to select which volumes to backup
 4. Click "Save Selection"
-5. Return to "Dashboard" and click "Start Backup Now"
+5. Configure backup schedule in "Config" tab if needed
+6. Return to "Dashboard" and click "Start Backup Now"
 
 ## Docker Compose Example
 
@@ -171,6 +175,24 @@ volumes:
 | `AUTH_PASSWORD` | No | - | Password for HTTP basic auth |
 | `SECRET_KEY` | No | auto | Flask secret key for sessions |
 
+### Backup Schedule Configuration
+
+The backup schedule can be configured through the web interface using standard cron syntax:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| Minute | 0-59 | 0 (top of hour) |
+| Hour | 0-23 | 2 (2 AM) |
+| Day | 1-31 or * | * (every day) |
+| Month | 1-12 or * | * (every month) |
+| Day of Week | 0-7 or * | * (every day) |
+
+**Common Examples**:
+- Daily at 2 AM: `0 2 * * *`
+- Every 6 hours: `0 */6 * * *`
+- Weekly on Sunday at 3 AM: `0 3 * * 0`
+- Monthly on 1st at midnight: `0 0 1 * *`
+
 ### Volume Mounts
 
 | Mount Point | Purpose | Example |
@@ -185,12 +207,12 @@ volumes:
 1. **Dashboard**: Overview of backup status, schedule, and quick actions
 2. **Volumes**: Select which mounted volumes to include in backups
 3. **Backups**: View backup history and restore specific snapshots
-4. **Config**: Manage settings and view system information
+4. **Config**: Manage settings, backup schedule, and rclone configuration
 5. **Logs**: Monitor application logs and troubleshoot issues
 
 ### Backup Operations
 
-- **Automatic**: Daily at 2:00 AM (configurable via cron)
+- **Automatic**: Configurable schedule via web interface
 - **Manual**: Click "Start Backup Now" in the web interface
 - **Selective**: Only backup volumes you've selected
 
@@ -202,29 +224,44 @@ volumes:
 4. Specify target path (default: `/data/restore`)
 5. Monitor progress in real-time
 
+### Download Features
+
+- **Download Logs**: Get all application logs as a zip file
+- **Download Backups**: Download specific backup snapshots as tar.gz archives
+- **Export Configuration**: Backup your settings and rclone configuration
+
 ### Monitoring
 
 - Real-time status updates during operations
+- Enhanced progress tracking with ETA calculations
 - Comprehensive logging with different levels (INFO, WARNING, ERROR)
-- Progress tracking with percentage completion
-- Email notifications (if configured)
+- Detailed progress indicators with visual feedback
+- System resource monitoring
 
 ## Advanced Configuration
 
-### Custom Backup Schedule
+### Backup Schedule Management
 
-To modify the backup schedule, edit the cron job in the container:
+The backup schedule can be managed through the web interface:
 
-```bash
-# Access container
-docker exec -it volume-backup /bin/bash
+1. Go to "Config" tab
+2. Modify the schedule fields using cron syntax
+3. Click "Save Schedule"
+4. Changes take effect immediately
 
-# Edit crontab
-crontab -e
+### Rclone Configuration Management
 
-# Example: Backup every 6 hours
-0 */6 * * * cd /app && python cron_backup.py >> /data/cron.log 2>&1
-```
+**Basic Setup** (Recommended):
+1. Access container shell: `docker exec -it volume-backup /bin/bash`
+2. Run: `rclone config`
+3. Follow interactive setup
+
+**Advanced Setup** (Web Interface):
+1. Go to "Config" tab
+2. Click "Edit Config" under Rclone Configuration
+3. Directly edit the rclone.conf file
+4. Click "Save" to apply changes
+5. Use "Test Connection" to verify
 
 ### Multiple Storage Backends
 
@@ -261,10 +298,16 @@ restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
 - Re-run `rclone config` to set up authentication
 - Check if tokens have expired (common with OneDrive)
 - Verify RCLONE_REMOTE matches the configured remote name
+- Use the web interface to test the connection
 
 **4. "Backup fails with permission errors"**
 - Ensure volumes are mounted read-only (`:ro`)
 - Check if the backup user has access to volume data
+
+**5. "Schedule not working"**
+- Check if cron daemon is running in the container
+- Verify schedule syntax using online cron validators
+- Check cron logs: `/data/cron.log`
 
 ### Log Analysis
 
@@ -285,25 +328,30 @@ docker logs volume-backup -f
 
 Use the built-in test features:
 
-1. **Test Rclone**: Go to Config page and click "Test Rclone Connection"
+1. **Test Rclone**: Go to Config page and click "Test Connection"
 2. **Test Backup**: Select a single small volume and run a manual backup
 3. **Test Restore**: Restore a backup to a test directory
+4. **Download Test**: Download logs to verify file access
 
 ## Security Considerations
 
 1. **Use Strong Passwords**: Set secure values for `RESTIC_PASSWORD` and `AUTH_PASSWORD`
 2. **Enable HTTPS**: Always use HTTPS in production with CapRover
+3. **Enable Authentication**: Set `AUTH_USER` and `AUTH_PASSWORD` for production
 3. **Network Security**: Consider restricting access to the backup interface
 4. **Volume Permissions**: Mount volumes as read-only when possible
 5. **Regular Updates**: Keep the container image updated for security patches
+6. **Secure Rclone Config**: Protect rclone configuration with appropriate permissions
 
 ## Backup Best Practices
 
 1. **Test Restores**: Regularly test restore procedures
+2. **Download Backups**: Periodically download backup archives for offline storage
 2. **Monitor Storage**: Check available space on remote storage
 3. **Verify Backups**: Use restic's check command periodically
 4. **Document Recovery**: Keep restore procedures documented
 5. **Multiple Backends**: Consider using multiple storage backends for redundancy
+6. **Schedule Optimization**: Adjust backup frequency based on data change rate
 
 ## Updates and Maintenance
 

@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     cron \
     unzip \
+    tar \
+    gzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install restic
