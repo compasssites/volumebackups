@@ -50,9 +50,9 @@ RCLONE_FOLDER=docker-backups
 # Optional - Timezone
 TZ=America/New_York
 
-# Optional - Basic authentication (recommended for production)
-AUTH_USER=admin
-AUTH_PASSWORD=secure-password
+# Optional - Custom login credentials (defaults: admin/admin123)
+WEB_USERNAME=youradminuser
+WEB_PASSWORD=youradminpassword
 ```
 
 ### 3. Configure Persistent Directories
@@ -116,7 +116,9 @@ After deployment, you need to configure rclone for your storage backend:
 ### 2. Access the Web Interface
 
 1. Open your configured domain in a browser
-2. Log in with your credentials (if authentication is enabled)
+2. Log in with your credentials:
+   - Default: `admin` / `admin123`
+   - Or your custom `WEB_USERNAME` / `WEB_PASSWORD`
 3. Go to "Volumes" tab to select which volumes to backup
 4. Click "Save Selection"
 5. Configure backup schedule in "Config" tab if needed
@@ -140,8 +142,8 @@ services:
       - RCLONE_REMOTE=onedrive
       - RCLONE_FOLDER=docker-backups
       - TZ=America/New_York
-      - AUTH_USER=admin
-      - AUTH_PASSWORD=secure-password
+      - WEB_USERNAME=admin
+      - WEB_PASSWORD=secure-password
     volumes:
       # Persistent data
       - ./backup-data:/data
@@ -171,8 +173,8 @@ volumes:
 | `RCLONE_REMOTE` | Yes | - | Name of configured rclone remote |
 | `RCLONE_FOLDER` | Yes | - | Folder path in remote storage |
 | `TZ` | No | UTC | Timezone for scheduling |
-| `AUTH_USER` | No | - | Username for HTTP basic auth |
-| `AUTH_PASSWORD` | No | - | Password for HTTP basic auth |
+| `WEB_USERNAME` | No | admin | Username for web login |
+| `WEB_PASSWORD` | No | admin123 | Password for web login |
 | `SECRET_KEY` | No | auto | Flask secret key for sessions |
 
 ### Backup Schedule Configuration
@@ -336,12 +338,14 @@ Use the built-in test features:
 ## Security Considerations
 
 1. **Use Strong Passwords**: Set secure values for `RESTIC_PASSWORD` and `AUTH_PASSWORD`
-2. **Enable HTTPS**: Always use HTTPS in production with CapRover
-3. **Enable Authentication**: Set `AUTH_USER` and `AUTH_PASSWORD` for production
+2. **Change Default Credentials**: Update `WEB_USERNAME` and `WEB_PASSWORD` from defaults
+3. **Enable HTTPS**: Always use HTTPS in production with CapRover
+4. **Set Security Question**: Configure a security question for password recovery
 3. **Network Security**: Consider restricting access to the backup interface
 4. **Volume Permissions**: Mount volumes as read-only when possible
 5. **Regular Updates**: Keep the container image updated for security patches
-6. **Secure Rclone Config**: Protect rclone configuration with appropriate permissions
+6. **Session Management**: Regular logout and password changes
+7. **Secure Rclone Config**: Protect rclone configuration with appropriate permissions
 
 ## Backup Best Practices
 

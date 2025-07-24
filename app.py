@@ -6,8 +6,10 @@ import time
 import tempfile
 import zipfile
 import io
+import hashlib
+import secrets
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, Response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, Response, session
 from functools import wraps
 import logging
 import glob
@@ -15,7 +17,7 @@ from crontab import CronTab
 from backup import BackupEngine, BackupStatus
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +38,67 @@ CONFIG_PATH = '/data/config.json'
 DATA_DIR = '/data'
 VOLUMES_DIR = '/volumes'
 RCLONE_CONFIG_PATH = '/data/rclone.conf'
+USER_CONFIG_PATH = '/data/users.json'
+
+# Default credentials
+DEFAULT_USERNAME = os.environ.get('WEB_USERNAME', 'admin')
+DEFAULT_PASSWORD = os.environ.get('WEB_PASSWORD', 'admin123')
+DEFAULT_SECRET_QUESTION = 'What is your favorite color?'
+DEFAULT_SECRET_ANSWER = 'blue'
+
+def init_user_config():
+    """Initialize user configuration with default credentials"""
+    if not os.path.exists(USER_CONFIG_PATH):
+        default_user = {
+            'username': DEFAULT_USERNAME,
+            'password_hash': hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest(),
+            'secret_question': DEFAULT_SECRET_QUESTION,
+            'secret_answer_hash': hashlib.sha256(DEFAULT_SECRET_ANSWER.lower().encode()).hexdigest()
+        }
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(USER_CONFIG_PATH, 'w') as f:
+                json.dump(default_user, f, indent=2)
+            logger.info("Initialized default user configuration")
+        except Exception as e:
+            logger.error(f"Error initializing user config: {e}")
+
+def load_user_config():
+    """Load user configuration"""
+    try:
+        with open(USER_CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading user config: {e}")
+        return None
+
+def save_user_config(user_config):
+    """Save user configuration"""
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(USER_CONFIG_PATH, 'w') as f:
+            json.dump(user_config, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving user config: {e}")
+        return False
+
+def verify_password(password, password_hash):
+    """Verify password against hash"""
+    return hashlib.sha256(password.encode()).hexdigest() == password_hash
+
+def verify_secret_answer(answer, answer_hash):
+    """Verify secret answer against hash"""
+    return hashlib.sha256(answer.lower().encode()).hexdigest() == answer_hash
+
+def login_required(f):
+    """Decorator to require login for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session or not session['logged_in']:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def load_config():
     """Load configuration from JSON file"""
@@ -150,26 +213,81 @@ def save_rclone_config(content):
         logger.error(f"Error saving rclone config: {e}")
         return False
 
-def basic_auth(f):
-    """Basic authentication decorator"""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_user = os.environ.get('AUTH_USER')
-        auth_pass = os.environ.get('AUTH_PASSWORD')
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
         
-        if not auth_user or not auth_pass:
-            return f(*args, **kwargs)
-            
-        auth = request.authorization
-        if not auth or auth.username != auth_user or auth.password != auth_pass:
-            return ('Authentication required', 401, {
-                'WWW-Authenticate': 'Basic realm="Docker Volume Backup"'
-            })
-        return f(*args, **kwargs)
-    return decorated
+        user_config = load_user_config()
+        if not user_config:
+            flash('System error: Unable to load user configuration', 'error')
+            return render_template('login.html')
+        
+        if (username == user_config['username'] and 
+            verify_password(password, user_config['password_hash'])):
+            session['logged_in'] = True
+            session['username'] = username
+            flash('Login successful', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Forgot password page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        secret_answer = request.form.get('secret_answer')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        user_config = load_user_config()
+        if not user_config:
+            flash('System error: Unable to load user configuration', 'error')
+            return render_template('forgot_password.html')
+        
+        if username != user_config['username']:
+            flash('Invalid username', 'error')
+            return render_template('forgot_password.html')
+        
+        if not verify_secret_answer(secret_answer, user_config['secret_answer_hash']):
+            flash('Incorrect answer to security question', 'error')
+            return render_template('forgot_password.html')
+        
+        if new_password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return render_template('forgot_password.html')
+        
+        if len(new_password) < 6:
+            flash('Password must be at least 6 characters long', 'error')
+            return render_template('forgot_password.html')
+        
+        # Update password
+        user_config['password_hash'] = hashlib.sha256(new_password.encode()).hexdigest()
+        if save_user_config(user_config):
+            flash('Password reset successfully. Please login with your new password.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Error saving new password. Please try again.', 'error')
+    
+    user_config = load_user_config()
+    secret_question = user_config.get('secret_question', 'Security question not set') if user_config else 'Security question not set'
+    
+    return render_template('forgot_password.html', secret_question=secret_question)
+
+@app.route('/logout')
+def logout():
+    """Logout and clear session"""
+    session.clear()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
 
 @app.route('/')
-@basic_auth
+@login_required
 def dashboard():
     """Main dashboard"""
     config = load_config()
@@ -197,7 +315,7 @@ def dashboard():
                          next_backup=next_backup)
 
 @app.route('/volumes')
-@basic_auth
+@login_required
 def volumes():
     """Volume management page"""
     volumes = discover_volumes()
@@ -210,7 +328,7 @@ def volumes():
     return render_template('volumes.html', volumes=volumes)
 
 @app.route('/api/volumes/select', methods=['POST'])
-@basic_auth
+@login_required
 def select_volumes():
     """Update selected volumes"""
     try:
@@ -230,7 +348,7 @@ def select_volumes():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/backup')
-@basic_auth
+@login_required
 def backup_page():
     """Backup management page"""
     snapshots = backup_engine.list_snapshots()
@@ -243,7 +361,7 @@ def backup_page():
                          logs=logs)
 
 @app.route('/api/backup/start', methods=['POST'])
-@basic_auth
+@login_required
 def start_backup():
     """Start a backup operation"""
     try:
@@ -264,7 +382,7 @@ def start_backup():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/api/restore/start', methods=['POST'])
-@basic_auth
+@login_required
 def start_restore():
     """Start a restore operation"""
     try:
@@ -287,19 +405,19 @@ def start_restore():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/api/status')
-@basic_auth
+@login_required
 def get_status():
     """Get current backup/restore status"""
     return jsonify(backup_engine.get_status())
 
 @app.route('/api/logs')
-@basic_auth
+@login_required
 def get_logs():
     """Get recent logs"""
     return jsonify(backup_engine.get_recent_logs())
 
 @app.route('/config')
-@basic_auth
+@login_required
 def config_page():
     """Configuration management page"""
     config = load_config()
@@ -316,7 +434,7 @@ def config_page():
                          schedule=schedule, rclone_config=rclone_config)
 
 @app.route('/api/config/update', methods=['POST'])
-@basic_auth
+@login_required
 def update_config():
     """Update configuration"""
     try:
@@ -338,7 +456,7 @@ def update_config():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/api/schedule/update', methods=['POST'])
-@basic_auth
+@login_required
 def update_schedule():
     """Update backup schedule"""
     try:
@@ -362,7 +480,7 @@ def update_schedule():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/api/rclone/config', methods=['GET', 'POST'])
-@basic_auth
+@login_required
 def rclone_config():
     """Get or update rclone configuration"""
     if request.method == 'GET':
@@ -383,7 +501,7 @@ def rclone_config():
             return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/api/rclone/test', methods=['POST'])
-@basic_auth
+@login_required
 def test_rclone():
     """Test rclone connection"""
     try:
@@ -413,7 +531,7 @@ def test_rclone():
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/download/logs')
-@basic_auth
+@login_required
 def download_logs():
     """Download application logs as a zip file"""
     try:
@@ -455,7 +573,7 @@ def download_logs():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/download/backup/<snapshot_id>')
-@basic_auth
+@login_required
 def download_backup(snapshot_id):
     """Download a backup snapshot as a tar.gz file"""
     try:
@@ -492,14 +610,14 @@ def download_backup(snapshot_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/logs')
-@basic_auth
+@login_required
 def logs_page():
     """Logs viewing page"""
     logs = backup_engine.get_recent_logs(limit=100)
     return render_template('logs.html', logs=logs)
 
 @app.route('/api/status/detailed')
-@basic_auth
+@login_required
 def get_detailed_status():
     """Get detailed status including system information"""
     status = backup_engine.get_status()
@@ -520,9 +638,60 @@ def get_detailed_status():
     
     return jsonify(status)
 
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile management"""
+    user_config = load_user_config()
+    if not user_config:
+        flash('Error loading user configuration', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'change_password':
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+            
+            if not verify_password(current_password, user_config['password_hash']):
+                flash('Current password is incorrect', 'error')
+            elif new_password != confirm_password:
+                flash('New passwords do not match', 'error')
+            elif len(new_password) < 6:
+                flash('Password must be at least 6 characters long', 'error')
+            else:
+                user_config['password_hash'] = hashlib.sha256(new_password.encode()).hexdigest()
+                if save_user_config(user_config):
+                    flash('Password changed successfully', 'success')
+                else:
+                    flash('Error saving new password', 'error')
+        
+        elif action == 'update_security':
+            secret_question = request.form.get('secret_question')
+            secret_answer = request.form.get('secret_answer')
+            
+            if not secret_question or not secret_answer:
+                flash('Both security question and answer are required', 'error')
+            else:
+                user_config['secret_question'] = secret_question
+                user_config['secret_answer_hash'] = hashlib.sha256(secret_answer.lower().encode()).hexdigest()
+                if save_user_config(user_config):
+                    flash('Security question updated successfully', 'success')
+                else:
+                    flash('Error updating security question', 'error')
+    
+    return render_template('profile.html', 
+                         username=user_config['username'],
+                         secret_question=user_config.get('secret_question', ''))
+
 if __name__ == '__main__':
     # Ensure data directory exists
     os.makedirs(DATA_DIR, exist_ok=True)
+    
+    # Initialize user configuration
+    init_user_config()
     
     # Set rclone config path
     os.environ['RCLONE_CONFIG'] = RCLONE_CONFIG_PATH

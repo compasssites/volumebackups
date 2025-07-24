@@ -96,6 +96,30 @@
                         <i data-lucide="file-text" class="w-4 h-4 mr-2"></i>
                         Logs
                     </a>
+                    
+                    <div class="relative">
+                        <button onclick="toggleUserMenu()" 
+                                class="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100">
+                            <i data-lucide="user" class="w-4 h-4 mr-2"></i>
+                            {{ session.username if session.username else 'User' }}
+                            <i data-lucide="chevron-down" class="w-4 h-4 ml-1"></i>
+                        </button>
+                        
+                        <div id="user-menu" 
+                             class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                            <a href="{{ url_for('profile') }}" 
+                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i data-lucide="settings" class="w-4 h-4 mr-2 inline"></i>
+                                Profile Settings
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <a href="{{ url_for('logout') }}" 
+                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i data-lucide="log-out" class="w-4 h-4 mr-2 inline"></i>
+                                Sign Out
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -254,6 +278,23 @@
                 }
             }, 5000);
         }
+    </script>
+    
+    <script>
+        function toggleUserMenu() {
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('hidden');
+        }
+        
+        // Close user menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('user-menu');
+            const button = event.target.closest('button');
+            
+            if (!button || !button.onclick || button.onclick.toString().indexOf('toggleUserMenu') === -1) {
+                menu.classList.add('hidden');
+            }
+        });
     </script>
 </body>
 </html>
